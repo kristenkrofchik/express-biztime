@@ -1,14 +1,15 @@
 const express = require("express");
-const router = new express.Router();
+let router = new express.Router();
 const db = require("../db");
 const ExpressError = require("../expressError");
+let slugify = require('slugify');
 
 //returns list of companies
 router.get("/", async function(req, res, next) {
     try {
-      const companiesQuery = await db.query("SELECT code, name, description FROM companies")
-      return res.json({ companies: companiesQuery.rows});
-    } catch(err){
+      const companiesQuery = await db.query("SELECT code, name, description FROM companies");
+      return res.json({ "companies": companiesQuery.rows});
+    } catch(err) {
       return next(err)
     }
 });
@@ -22,11 +23,12 @@ router.get("/:code", async function(req, res, next) {
     );
 
     if (companyQuery.rows.length === 0) {
-        let notFoundError = new ExpressError(`There is no company with code '${req.params.code}`);
+        let notFoundError = new ExpressError(`There is no company with code ${req.params.code}`);
         notFoundError.status = 404;
         throw notFoundError;
     }
         const invoices = invoiceQuery.rows;
+
         company.invoices = invoices.rows.map(inv => inv.id);
 
         return res.json({ 'company': companyQuery.rows[0] });
@@ -38,13 +40,15 @@ router.get("/:code", async function(req, res, next) {
 //adds a company to db
 router.post("/", async function(req, res, next) {
     try {
+      let code = slugify(req.body.name, {lower: true});
+
       const result = await db.query(
-        `INSERT INTO companies (name, description) 
-           VALUES ($1) 
+        `INSERT INTO companies (code, name, description) 
+           VALUES ($1, $2, $3) 
            RETURNING code, name, description`,
-        [req.body.name, req.body.description]);
+        [code, req.body.name, req.body.description]);
   
-      return res.status(201).json({company: result.rows[0]});  
+      return res.status(201).json({"company": result.rows[0]});  
     } catch (err) {
       return next(err);
     }
@@ -53,13 +57,13 @@ router.post("/", async function(req, res, next) {
 //edits existing company
 router.put('/:code', async (req, res, next) => {
     try {
-      const { code } = req.params;
+      let code = req.params.code;
       const { name, description } = req.body;
       const results = await db.query('UPDATE companies SET name=$1, description=$2 WHERE code=$3 RETURNING code, name, description', [name, description, code])
       if (results.rows.length === 0) {
         throw new ExpressError(`Can't update company with code of ${code}`, 404)
       }
-      return res.send({ company: results.rows[0] })
+      return res.send({ "company": results.rows[0] })
     } catch (e) {
       return next(e)
     }
